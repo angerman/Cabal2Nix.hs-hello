@@ -24,16 +24,15 @@ let
     # the package-set.nix currenty hardcodes lts-11.5
     haskellPackages = compiler.override {
       initialPackages = { pkgs, stdenv, callPackage }:
-                        self: import <stackage/package-set.nix> {}
-                              // { base = null; };
+                        self: (import <stackage>).lts-11_5;
       configurationCommon = { ... }: self: super: {};
       compilerConfig = self: super: {};
     };
   };
 
   pkgs = import <nixpkgs> { overlays = [ overlay ]; };
-  driver = import ./nix/driver.nix;
-  host-map = import ./nix/host-map.nix;
+  haskell = import <haskell>;
+  inherit (haskell) driver host-map;
   hs-hello = import ./hs-hello.nix;
 
   # mkLocal will inject `src = ./.` into the derivation, making the
@@ -51,5 +50,5 @@ in
   # picks the haskell packages from pkgs.haskellPackages.
   { hello-raw = hello;
     hello = mkLocal (pkgs.haskellPackages.callPackage hello {});
-    cassava = pkgs.haskellPackages.cassava;
+    inherit (pkgs.haskellPackages) nanospec hspec cassava text;
   }
