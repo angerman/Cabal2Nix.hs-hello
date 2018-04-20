@@ -20,8 +20,7 @@
 #
 let
   overlay = self: super: {
-    # the package-set.nix currenty hardcodes lts-11.5
-    haskellPackages = (import <stackage>).lts-11_5;
+    haskellPackages = (import <stackage>).lts-9_1;
   };
 
   pkgs = import <nixpkgs> { overlays = [ overlay ]; };
