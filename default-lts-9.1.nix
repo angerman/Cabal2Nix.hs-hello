@@ -20,28 +20,12 @@
 #
 let
   overlay = self: super: {
-    haskellPackages = (import <stackage>).lts-9_1;
+    haskellPackages = (import <stackage>).lts-9_1
+      { extraDeps = hsPkgs: { hs-hello = ./hs-hello.nix; };
+      };
   };
 
   pkgs = import <nixpkgs> { overlays = [ overlay ]; };
-  haskell = import <haskell>;
-  inherit (haskell) driver host-map;
-  hs-hello = import ./hs-hello.nix;
 
-  # mkLocal will inject `src = ./.` into the derivation, making the
-  # generic builder build the package in the current directory instead
-  # of trying to download it from hackage.
-  mkLocal = drv: pkgs.haskell.lib.overrideCabal drv (drv: { src = ./.; });
-  # Create the hello derivation.
-  hello = driver { cabalexpr = hs-hello; pkgs = pkgs;
-                   inherit (host-map pkgs.stdenv) os arch; };
 in
-  # build the packge.  NOTE: with cabal2nix we could
-  # provide additional package modifications in the
-  # additional arguments to `callPackage`, with
-  # Cabal2Nix we can not use this mechanism, as it
-  # picks the haskell packages from pkgs.haskellPackages.
-  { hello-raw = hello;
-    hello = mkLocal (pkgs.haskellPackages.callPackage hello {});
-    inherit (pkgs.haskellPackages) nanospec hspec cassava text;
-  }
+  pkgs.haskellPackages
