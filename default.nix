@@ -25,6 +25,55 @@ let
 
   hs-hello = import ./hs-hello.nix;
 
+  # This is a tiny bit better than doJailbreak.
+  #
+  # We essentially *know* the dependencies, and with the
+  # full cabal file representation, we also know all the
+  # flags.  As such we can sidestep the solver.
+  #
+  # Pros:
+  #  - no need for doJailbreak
+  #    - no need for jailbreak-cabal to be built with
+  #      Cabal2 if the cabal file requires it.
+  #  - no reliance on --allow-newer, which only made
+  #    a very short lived appearance in Cabal.
+  #    (Cabal-2.0.0.2 -- Cabal-2.2.0.0)
+  #
+  # Cons:
+  #  - automatic flag resolution won't happen and will
+  #    have to be hard coded.
+  #
+  # Ideally we'd just inspect the haskell*Depends fields
+  # we feed the builder. However because we null out the
+  # lirbaries ghc ships (e.g. base, ghc, ...) this would
+  # result in an incomplete --dependency=<name>=<name>-<version>
+  # set and not lead to the desired outcome.
+  #
+  # If we could still have base, etc. not nulled, but
+  # produce some virtual derivation, that might allow us
+  # to just use the haskell*Depends fields to extract the
+  # name and version for each dependency.
+  #
+  # Ref: https://github.com/haskell/cabal/issues/3163#issuecomment-185833150
+  # ---
+  # ghc-pkg should be ${ghcCommand}-pkg; and --package-db
+  # should better be --${packageDbFlag}; but we don't have
+  # those variables in scope.
+  doExactConfig = pkg: pkgs.lib.overrideDerivation pkg (drv: {
+    preConfigure = (drv.preConfigure or "") + ''
+    configureFlags+=" --exact-configuration"
+    globalPackages=$(ghc-pkg list --global --simple-output)
+    localPackages=$(ghc-pkg --package-db="$packageConfDir" list --simple-output)
+    for pkg in $globalPackages; do
+      if [ "''${pkg%-*}" != "rts" ]; then
+        configureFlags+=" --dependency="''${pkg%-*}=$pkg
+      fi
+    done
+    for pkg in $localPackages; do
+      configureFlags+=" --dependency="''${pkg%-*}=$pkg
+    done
+'';
+  });
   # Create the hello derivation.
   hello = driver { cabalexpr = hs-hello; pkgs = pkgs;
                    inherit (host-map pkgs.stdenv) os arch;
@@ -35,4 +84,9 @@ in
   # additional arguments to `callPackage`, with
   # Cabal2Nix we can not use this mechanism, as it
   # picks the haskell packages from pkgs.haskellPackages.
-  pkgs.haskellPackages.callPackage hello {}
+  let myPkgs = rec { hello0 = hello;
+        hello1 = pkgs.haskellPackages.callPackage hello0;
+        hello2 = hello1 {};
+      };
+  in doExactConfig myPkgs.hello2
+#  pkgs.haskellPackages.callPackage hello {}
